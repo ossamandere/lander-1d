@@ -1,0 +1,7 @@
+gymnasium>=1.2.0
+torch>=2.0.0
+numpy>=2.0.0
+matplotlib>=3.10.0
+pygame>=2.6.0
+box2d>=2.3.10
+tensorboard>=2.20.0
