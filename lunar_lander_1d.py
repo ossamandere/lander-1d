@@ -48,12 +48,11 @@ class LunarLander1D(gym.Env):
 
         # Lander parameters
         self.dry_mass = 1000.0  # kg (mass without fuel)
-        self.initial_fuel = 150.0  # kg
+        self.initial_fuel = 100.0  # kg
         self.max_thrust = 5000.0  # N
         self.fuel_consumption_rate = 1.0  # kg/s at max thrust
 
         # Episode parameters
-        self.max_steps = 3000
         self.initial_altitude_range = (100.0, 500.0)  # m (reduced for faster episodes)
         self.initial_velocity_range = (-30.0, -10.0)  # m/s (negative = falling)
         self.safe_landing_velocity = 2.0  # m/s
@@ -134,60 +133,28 @@ class LunarLander1D(gym.Env):
         terminated = False
         reward = 0.0
 
-        # Small penalty for fuel usage (encourage efficiency)
-        reward -= 0.001 * thrust_level
+        # Small time penalty to encourage landing quickly
+        reward = -0.01
 
-        # Shaped reward that rewards decreasing velocity more as altitude decreases
-        reward += self._get_weighted_velocity_reward_by_height(self.altitude, self.velocity)
-
-        # Shaped rewards for safe descent
-        velocity_magnitude = abs(self.velocity)
-
-        # 1. Reward for descending (not ascending!) when close to ground
-        if self.altitude < 100:
-            if self.velocity < 0:  # Descending
-                # Reward for slow descent near ground
-                if velocity_magnitude < 5.0:
-                    reward += 0.05 * (5.0 - velocity_magnitude)
-            else:  # Ascending - bad!
-                reward -= 0.2  # Penalty for ascending when low
-
-        # 2. Penalty for going too fast
-        # if velocity_magnitude > 20.0:
-        #     reward -= 0.05
-
-        # 3. Small continuous reward for making progress (descending)
-        if self.velocity < -0.5:  # Descending
-            reward += 0.01
-
-        # Check if landed or crashed
+        # Check if lander has landed or crashed
         if self.altitude <= 0:
             terminated = True
             landing_speed = abs(self.velocity)
 
             if landing_speed < self.safe_landing_velocity:
-                # Safe landing! Big reward
-                reward += 500.0
-                # Bonus for fuel remaining
-                reward += self.fuel * 0.5
+                # Safe landing - SUCCESS!
+                reward = 100.0
             else:
-                # Crash - penalty proportional to impact velocity
-                reward -= 100.0
-                reward -= min(landing_speed * 2.0, 100.0)  # Additional penalty for harder crashes
+                # Crashed - FAILURE!
+                reward = -100.0
 
-            self.altitude = 0.0  # Clamp to ground
+            self.altitude = 0.0
 
-        # Penalty for running out of fuel before landing
-        if self.fuel <= 0 and self.altitude > 0:
-            reward -= 0.1  # Small penalty each step without fuel
-
-        # Max steps timeout
-        if self.steps >= self.max_steps:
-            terminated = True
-            reward -= 50.0  # Penalty for not landing in time
+        # Note: Timeout is handled by Gymnasium's TimeLimit wrapper via max_episode_steps
 
         observation = self._get_obs()
         info = self._get_info()
+        info['termination_reason'] = self._get_termination_reason(terminated)
 
         return observation, reward, terminated, False, info
     
@@ -210,6 +177,19 @@ class LunarLander1D(gym.Env):
             "steps": self.steps,
             "mass": self.dry_mass + self.fuel,
         }
+
+    def _get_termination_reason(self, terminated):
+        """Get the reason for episode termination."""
+        if not terminated:
+            return "ongoing"
+        elif self.altitude <= 0:
+            landing_speed = abs(self.velocity)
+            if landing_speed < self.safe_landing_velocity:
+                return "success_landing"
+            else:
+                return "failure_crash"
+        else:
+            return "unknown"
 
     def render(self):
         """Render the environment."""
@@ -306,7 +286,7 @@ class LunarLander1D(gym.Env):
 gym.register(
     id='LunarLander1D-v0',
     entry_point='lunar_lander_1d:LunarLander1D',
-    max_episode_steps=1000,
+    max_episode_steps=3000,  # Only place to configure episode timeout
 )
 
 

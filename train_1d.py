@@ -247,19 +247,20 @@ def record_video_episode(agent, video_dir, episode_num, device):
     episode_reward = 0
     steps = 0
 
-    while not done and steps < 3000:
+    while not done:
         with torch.no_grad():
             state_tensor = torch.FloatTensor(state).unsqueeze(0).to(device)
             action, _ = agent.policy.act(state_tensor)
             action = action.cpu().numpy()[0]
 
-        state, reward, terminated, truncated, _ = env.step(action)
+        state, reward, terminated, truncated, info = env.step(action)
         episode_reward += reward
         done = terminated or truncated
         steps += 1
 
     env.close()
-    print(f"  Video recorded: Episode {episode_num}, Reward: {episode_reward:.2f}, Steps: {steps}")
+    termination_reason = info.get('termination_reason', 'unknown')
+    print(f"  Video recorded: Episode {episode_num}, Reward: {episode_reward:.2f}, Steps: {steps}, Outcome: {termination_reason}")
     return episode_reward
 
 
